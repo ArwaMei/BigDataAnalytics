@@ -1,0 +1,73 @@
+1. Verify Docker is Running
+Open PowerShell and run:
+docker ps
+
+2. Run Cassandra Container
+docker run --name mon-cassandra -p 9042:9042 -d cassandra:latest
+
+3. Access cqlsh
+docker exec -it mon-cassandra cqlsh
+
+4. Create Keyspace
+CREATE KEYSPACE IF NOT EXISTS resto_NY
+WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 };
+USE resto_NY;
+
+5. Create Tables
+CREATE TABLE Restaurant (
+id INT,
+Name VARCHAR,
+borough VARCHAR,
+BuildingNum VARCHAR,
+Street VARCHAR,
+ZipCode INT,
+Phone TEXT,
+CuisineType VARCHAR,
+PRIMARY KEY (id)
+);
+CREATE INDEX fk_Restaurant_cuisine ON Restaurant (CuisineType);
+CREATE TABLE Inspection (
+idRestaurant INT,
+InspectionDate date,
+ViolationCode VARCHAR,
+ViolationDescription VARCHAR,
+CriticalFlag VARCHAR,
+Score INT,
+Grade VARCHAR,
+PRIMARY KEY (idRestaurant, InspectionDate)
+);
+CREATE INDEX fk_Inspection_Restaurant ON Inspection (Grade);
+
+6. Copy CSV Files into Container
+In PowerShell:
+docker cp "C:/Users/sinio/Downloads/restaurants.csv" mon-cassandra:/restaurants.csv
+docker cp "C:/Users/sinio/Downloads/restaurants_inspections.csv"
+mon-cassandra:/restaurants_inspections.csv
+
+7. Import Data in cqlsh
+USE resto_NY;
+COPY Restaurant (id, name, borough, buildingnum, street, zipcode, phone, cuisinetype)
+FROM '/restaurants.csv' WITH DELIMITER=',' AND HEADER=TRUE;
+COPY Inspection (idrestaurant, inspectiondate, violationcode, violationdescription,
+criticalflag, score, grade)
+FROM '/restaurants_inspections.csv' WITH DELIMITER=',' AND HEADER=TRUE;
+
+Queries
+List all restaurants:
+SELECT * FROM Restaurant LIMIT 50;
+Restaurant name and borough by ID:
+SELECT name, borough FROM Restaurant WHERE id = 41569764;
+Inspections for restaurant:
+SELECT inspectiondate, grade FROM Inspection WHERE idrestaurant = 41569764;
+French cuisine restaurants:
+SELECT name FROM Restaurant WHERE cuisinetype = 'French';
+Restaurants in BROOKLYN:
+SELECT name FROM Restaurant WHERE borough = 'BROOKLYN' ALLOW FILTERING;
+Inspections score >= 10:
+SELECT grade, score FROM Inspection
+WHERE idrestaurant = 41569764 AND score >= 10 ALLOW FILTERING;
+Grades for score > 30:
+SELECT grade FROM Inspection WHERE score > 30 ALLOW FILTERING;
+Count:
+SELECT count(*) FROM Inspection WHERE score > 30 ALLOW FILTERING;
+SELECT count(grade) FROM Inspection WHERE score > 30 ALLOW FILTERING;
